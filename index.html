@@ -736,13 +736,19 @@
   .breathe canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
   .br-top, .br-mid, .br-foot { position: relative; }
   .br-top { display: flex; justify-content: space-between; padding: calc(16px + env(safe-area-inset-top)) 20px 0; font-size: 0.9rem; color: rgba(244, 248, 247, 0.75); }
-  .br-mid { align-self: start; padding: 12vh 24px 0; text-align: center; }
-  .br-word { margin: 0; font-size: 2.6rem; font-weight: 800; letter-spacing: -0.03em; }
+  .br-mid { align-self: start; padding: 7vh 24px 0; text-align: center; text-shadow: 0 2px 18px rgba(4, 12, 20, 0.6); }
+  .br-bar { width: 120px; height: 3px; margin: 14px auto 0; border-radius: 2px; background: rgba(244, 248, 247, 0.22); overflow: hidden; }
+  .br-bar i { display: block; height: 100%; background: #F6C768; transform-origin: left; transform: scaleX(0); }
+  .br-word { margin: 0; font-size: 2.7rem; font-weight: 800; letter-spacing: -0.03em; }
   .br-hint { margin: 10px auto 0; max-width: 30ch; font-family: var(--reading); font-size: 1.15rem; line-height: 1.4; color: rgba(244, 248, 247, 0.85); }
   .br-foot { display: grid; gap: 14px; padding: 0 20px calc(22px + env(safe-area-inset-bottom)); }
   .br-pace { justify-content: center; }
   .br-pace .chip { background: rgba(8, 22, 28, 0.55); color: #F4F8F7; }
   .br-pace .chip.on { background: #F4F8F7; color: #12303C; }
+
+  /* Chapter illustrations */
+  .chap-art { margin: 14px 0 0; border-radius: var(--r-card); overflow: hidden; aspect-ratio: 800 / 300; background: #21434F; box-shadow: var(--shadow); }
+  .chap-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -780,6 +786,7 @@
   </nav>
   <h2 class="chapter" id="ch-today">Today</h2>
   <p class="chapter-sub">What needs doing today and tonight.</p>
+  <figure class="chap-art"><img src="img/today.svg" alt="First light over the sea, a small boat setting out" width="800" height="340" decoding="async"></figure>
   <section class="urge panel" id="urge" aria-live="polite">
     <h3 class="pt">When an urge hits</h3>
     <div id="urge-idle">
@@ -849,6 +856,7 @@
   </section>
   <h2 class="chapter" id="ch-progress">Progress</h2>
   <p class="chapter-sub">Everything you have built so far.</p>
+  <figure class="chap-art"><img src="img/progress.svg" alt="A chart and compass on the chart table, open sea beyond" width="800" height="340" decoding="async"></figure>
   <section class="panel">
     <h3 class="pt">Clean time</h3>
     <div class="clock" role="timer" aria-live="off">
@@ -961,6 +969,7 @@
   </section>
   <h2 class="chapter" id="ch-plan">Plan</h2>
   <p class="chapter-sub">The weekend and the hard dates, decided before they arrive.</p>
+  <figure class="chap-art"><img src="img/plan.svg" alt="A lighthouse on the headland at dusk, its beam over the water" width="800" height="340" decoding="async"></figure>
   <p class="chart-open"><button class="btn wide" id="chart-open" type="button">See it on the chart</button></p>
   <section class="panel" id="weekend">
   <h3 class="pt" id="weekend-title">This weekend</h3>
@@ -1000,6 +1009,7 @@
   </section>
   <h2 class="chapter" id="ch-read">Read</h2>
   <p class="chapter-sub">Words for the moments that need them, and your own.</p>
+  <figure class="chap-art"><img src="img/read.svg" alt="A bottle washed up on the sand at the tide line" width="800" height="340" decoding="async"></figure>
   <section class="panel">
     <h3 class="pt">Messages in a bottle</h3>
     <p class="lede">Write to yourself on a good evening. Once sealed, a message stays closed until you press Ride out an urge, when one opens first.</p>
@@ -1080,6 +1090,7 @@
   </section>
   <h2 class="chapter" id="ch-help">Help</h2>
   <p class="chapter-sub">If it gets heavy, people are there.</p>
+  <figure class="chap-art"><img src="img/help.svg" alt="The harbour at evening, a lifebuoy on the quay rail" width="800" height="340" decoding="async"></figure>
   <section class="panel">
   <h3 class="pt">Numbers to ring</h3>
   <ul class="numbers">
@@ -1141,7 +1152,7 @@
 <div class="breathe" id="breathe" role="dialog" aria-modal="true" aria-labelledby="br-word" hidden>
   <canvas id="br-sea" aria-hidden="true"></canvas>
   <div class="br-top"><span id="br-timer"></span><span id="br-count"></span></div>
-  <div class="br-mid"><p class="br-word" id="br-word" aria-live="polite">Settle in</p><p class="br-hint" id="br-hint">Breathe with the water. In as it comes up the shore, out as it draws back.</p></div>
+  <div class="br-mid"><p class="br-word" id="br-word" aria-live="polite">Settle in</p><div class="br-bar" aria-hidden="true"><i id="br-bar-in"></i></div><p class="br-hint" id="br-hint">Breathe with the water. In as it comes up the shore, out as it draws back.</p></div>
   <div class="br-foot">
     <div class="chips br-pace" role="group" aria-label="Pace">
       <button class="chip on" type="button" data-pace="calm">In 4, out 6</button>
@@ -3654,42 +3665,173 @@
     }
     return { word: "", lvl: 0, ph: 0, f: 0 };
   }
+  /* The shore at dusk. Swell comes in from the horizon, breaks, and runs up the sand as you breathe in;
+     it draws back as you breathe out, leaving the sand wet and a lace of foam that slowly melts. */
+  var brStatic = null;
+  function brBuild(w, h, dpr) {
+    var cv = document.createElement("canvas"); cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    var c = cv.getContext("2d"), hz = Math.round(h * 0.34), yS = Math.round(h * 0.55), sx = w * 0.68, i;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var g = c.createLinearGradient(0, 0, 0, hz);
+    g.addColorStop(0, "#0E2133"); g.addColorStop(0.5, "#3C4E6C"); g.addColorStop(0.85, "#B98478"); g.addColorStop(1, "#F0B98A");
+    c.fillStyle = g; c.fillRect(0, 0, w, hz + 1);
+    for (i = 0; i < 70; i++) {                                                     // the first stars
+      var y = Math.pow(hsh2(i, 2), 1.5) * hz * 0.6;
+      c.fillStyle = "rgba(255,255,255," + ((0.2 + 0.6 * hsh2(i, 3)) * (1 - y / (hz * 0.6))).toFixed(2) + ")";
+      var r = 0.6 + hsh2(i, 4); c.fillRect(hsh2(i, 1) * w, y, r, r);
+    }
+    var gl = c.createRadialGradient(sx, hz, 0, sx, hz, w * 0.7);
+    gl.addColorStop(0, "rgba(255,206,140,0.65)"); gl.addColorStop(0.25, "rgba(255,170,110,0.25)"); gl.addColorStop(1, "rgba(255,170,110,0)");
+    c.fillStyle = gl; c.fillRect(0, 0, w, hz);
+    c.save(); c.beginPath(); c.rect(0, 0, w, hz); c.clip();
+    c.fillStyle = "#FFE4B4"; c.beginPath(); c.arc(sx, hz + 4, 18, 0, 6.2832); c.fill();
+    c.restore();
+    [[0.12, 0.2, 120], [0.5, 0.42, 90], [0.85, 0.18, 110]].forEach(function (cl) {   // long low cloud, lit from beneath
+      for (var j = 0; j < 5; j++) {
+        var cx = cl[0] * w + (j - 2) * cl[2] * 0.22, cy = cl[1] * hz - Math.abs(j - 2) * -2, rr = cl[2] * (0.3 - Math.abs(j - 2) * 0.04);
+        c.fillStyle = "rgba(70,64,96,0.55)"; c.beginPath(); c.ellipse(cx, cy, rr * 1.5, rr * 0.32, 0, 0, 6.2832); c.fill();
+        c.fillStyle = "rgba(255,186,150,0.45)"; c.beginPath(); c.ellipse(cx, cy + rr * 0.12, rr * 1.3, rr * 0.18, 0, 0, 6.2832); c.fill();
+      }
+    });
+    c.fillStyle = "#2E3A52"; c.beginPath(); c.moveTo(0, hz); c.lineTo(0, hz - 22); c.quadraticCurveTo(w * 0.16, hz - 34, w * 0.34, hz - 12); c.lineTo(w * 0.42, hz); c.fill();   // the headland
+    c.fillStyle = "#24304A"; c.beginPath(); c.moveTo(0, hz); c.lineTo(0, hz - 9); c.quadraticCurveTo(w * 0.3, hz - 16, w * 0.55, hz); c.fill();
+    var sd = c.createLinearGradient(0, yS, 0, h);                                   // the sand, warm where the light reaches it
+    sd.addColorStop(0, "#6D6656"); sd.addColorStop(0.4, "#8A7D63"); sd.addColorStop(1, "#5E5444");
+    c.fillStyle = sd; c.fillRect(0, yS - 6, w, h - yS + 6);
+    for (i = 0; i < 900; i++) {
+      var gy = yS + Math.pow(hsh2(i, 11), 0.8) * (h - yS), gs = 0.4 + 1.6 * (gy - yS) / (h - yS) * hsh2(i, 13);
+      c.fillStyle = hsh2(i, 12) > 0.5 ? "rgba(40,32,22,0.28)" : "rgba(230,214,180,0.22)"; c.fillRect(hsh2(i, 10) * w, gy, gs, gs);
+    }
+    [[0.18, 0.86, 11], [0.8, 0.78, 8], [0.62, 0.95, 14]].forEach(function (pb) {       // a few pebbles and a shell
+      var px = pb[0] * w, py = yS + pb[1] * (h - yS) * 0.92, pr = pb[2];
+      c.fillStyle = "rgba(20,16,12,0.3)"; c.beginPath(); c.ellipse(px + 2, py + 3, pr, pr * 0.45, 0, 0, 6.2832); c.fill();
+      c.fillStyle = "#857B6E"; c.beginPath(); c.ellipse(px, py, pr, pr * 0.5, 0.1, 0, 6.2832); c.fill();
+      c.fillStyle = "rgba(220,212,196,0.45)"; c.beginPath(); c.ellipse(px - pr * 0.3, py - pr * 0.18, pr * 0.45, pr * 0.16, 0.1, 0, 6.2832); c.fill();
+    });
+    return { cv: cv, w: w, h: h, hz: hz, yS: yS, sx: sx };
+  }
   function brDraw(now) {
     if (!br) return;
     var cv = $("br-sea"), c = cv.getContext("2d"), w = cv.clientWidth, h = cv.clientHeight, dpr = Math.min(window.devicePixelRatio || 1, 2);
-    if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
-    c.setTransform(dpr, 0, 0, dpr, 0, 0);
-    var st = brLevel(br, now), t = (now - br.t0) / 1000, lvl = still ? 0.5 : st.lvl, x;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); brStatic = null; }
+    if (!brStatic || brStatic.w !== w || brStatic.h !== h) brStatic = brBuild(w, h, dpr);
+    var S = brStatic, hz = S.hz, yS = S.yS, sx = S.sx, st = brLevel(br, now), t = (now - br.t0) / 1000;
+    var dt = Math.min(0.05, Math.max(0, t - (br.lt || t))); br.lt = t;
+    var lvl = still ? 0.55 : st.lvl, x, i, j;
+    br.sm = br.sm === undefined ? lvl : br.sm + (lvl - br.sm) * Math.min(1, dt * 6);   // smoothed, so the water never jerks
+    var L = br.sm, rising = st.word === "Breathe in";
     if (st.word !== br.word) {
       br.word = st.word; $("br-word").textContent = st.word;
       if (st.ph >= 0) $("br-hint").textContent = st.word === "Breathe in" ? "The water comes up the shore." : st.word === "Breathe out" ? "It draws back, slowly, all the way." : "Stay with it.";
     }
-    if (seaAudio && playing) {                               // the sea follows the breath
+    $("br-bar-in").style.transform = "scaleX(" + (st.ph >= 0 ? st.f : 0).toFixed(3) + ")";
+    if (seaAudio && playing) {                                                    // the sea follows the breath
       var at = seaAudio.ctx.currentTime;
-      seaAudio.master.gain.setTargetAtTime(0.18 + 0.55 * lvl, at, 0.35);
-      seaAudio.low.frequency.setTargetAtTime(600 + 1500 * lvl, at, 0.35);
+      seaAudio.master.gain.setTargetAtTime(0.16 + 0.6 * L, at, 0.3);
+      seaAudio.low.frequency.setTargetAtTime(550 + 1700 * L, at, 0.3);
     }
-    var sky = c.createLinearGradient(0, 0, 0, h);
-    sky.addColorStop(0, "#0B1E28"); sky.addColorStop(0.5, "#16364A"); sky.addColorStop(1, "#2A4A52");
-    c.fillStyle = sky; c.fillRect(0, 0, w, h);
-    var sand = c.createLinearGradient(0, h * 0.45, 0, h);       // the shore, rising towards you
-    sand.addColorStop(0, "#3E4A44"); sand.addColorStop(1, "#6B6250");
-    c.fillStyle = sand; c.fillRect(0, h * 0.42, w, h);
-    var edge = h * (0.96 - 0.5 * lvl), wet = h * (0.96 - 0.5 * Math.max(lvl, br.peak = Math.max((br.peak || 0) * 0.995, lvl)));
-    c.fillStyle = "rgba(30,40,40,0.35)"; c.fillRect(0, wet, w, h);       // the dark wet sand it leaves behind
-    var surf = function (xx) { return edge + 6 * Math.sin(xx * 0.018 + t * 0.9) + 3 * Math.sin(xx * 0.05 - t * 1.4); };
-    var g = c.createLinearGradient(0, h * 0.42, 0, edge);
-    g.addColorStop(0, "#1E4A5C"); g.addColorStop(1, "#3E7F8C");
-    c.fillStyle = g; c.beginPath(); c.moveTo(0, h * 0.42);
-    for (x = 0; x <= w + 8; x += 8) c.lineTo(x, surf(x));
-    c.lineTo(w, h * 0.42); c.closePath(); c.fill();
-    c.strokeStyle = "rgba(240,248,247,0.75)"; c.lineWidth = 3; c.lineCap = "round"; c.beginPath();   // the foam line
-    for (x = 0; x <= w + 8; x += 8) { if (x) c.lineTo(x, surf(x)); else c.moveTo(x, surf(x)); }
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.drawImage(S.cv, 0, 0, w, h);
+
+    var depth = yS - hz, N = 10, sp = t * 0.18, base = Math.floor(sp), frac = sp - base;   // swell rows running in to the beach
+    for (i = 0; i < N; i++) {
+      var u = (i + frac) / N, id = i - base, y = hz + 2 + depth * Math.pow(u, 1.6), ny = hz + 2 + depth * Math.pow(u + 1 / N, 1.6);
+      var a = 0.4 + 5 * u, k = 0.02 / (0.2 + u), ph = hsh2(id, 31) * 6.28, pts = [];
+      for (x = -10; x <= w + 10; x += 8) pts.push(y + a * (0.6 * Math.sin(x * k + ph + t * 0.5) + 0.4 * Math.sin(x * k * 2.6 - ph - t * 0.8)));
+      var cA = [Math.round(154 - 120 * u), Math.round(126 - 60 * u), Math.round(138 - 70 * u)];
+      var rg = c.createLinearGradient(0, y - a, 0, ny + a);
+      rg.addColorStop(0, "rgb(" + (cA[0] + 24) + "," + (cA[1] + 24) + "," + (cA[2] + 24) + ")"); rg.addColorStop(1, "rgb(" + cA[0] + "," + cA[1] + "," + cA[2] + ")");
+      c.fillStyle = rg; c.beginPath(); c.moveTo(-10, i === N - 1 ? yS + 4 : ny + 12);
+      for (j = 0; j < pts.length; j++) c.lineTo(-10 + j * 8, pts[j]);
+      c.lineTo(w + 10, i === N - 1 ? yS + 4 : ny + 12); c.closePath(); c.fill();
+      c.globalCompositeOperation = "lighter";
+      for (j = 0; j < 5 + u * 4; j++) {                                               // the sun's road across it
+        var off = (hsh2(id, 40 + j) - 0.5) * 2, gx = sx + off * Math.abs(off) * (14 + 90 * u), gw = (4 + 22 * u) * (0.4 + 0.6 * hsh2(id, 50 + j));
+        var fl = 0.5 + 0.5 * Math.sin(t * (1.4 + 2 * hsh2(id, 60 + j)) + j), ga = (0.75 - 0.5 * u) * fl * fl;
+        if (ga < 0.03) continue;
+        var at2 = Math.max(0, Math.min(pts.length - 1, Math.round((gx + 10) / 8)));
+        c.fillStyle = "rgba(255,214,160," + ga.toFixed(2) + ")"; c.beginPath(); c.ellipse(gx, pts[at2] + 1, gw / 2, 0.7 + u, 0, 0, 6.2832); c.fill();
+      }
+      c.globalCompositeOperation = "source-over";
+    }
+    var hg = c.createLinearGradient(0, hz - 6, 0, hz + 8);                               // haze on the horizon
+    hg.addColorStop(0, "rgba(240,185,138,0)"); hg.addColorStop(0.5, "rgba(240,185,138,0.45)"); hg.addColorStop(1, "rgba(240,185,138,0)");
+    c.fillStyle = hg; c.fillRect(0, hz - 6, w, 14);
+
+    var crest = rising ? Math.sin(Math.PI * Math.min(1, st.f * 1.15)) : 0;             // the wave standing up and breaking as you breathe in
+    br.cr = (br.cr || 0) + (crest - (br.cr || 0)) * Math.min(1, dt * 4); crest = br.cr;
+    var yB = yS - 4, hB = 4 + 16 * crest, curl = function (xx) { return yB - hB * (0.75 + 0.25 * Math.sin(xx * 0.012 + t * 0.6)); };
+    var wg = c.createLinearGradient(0, yB - hB - 4, 0, yB + 6);
+    wg.addColorStop(0, "#5E9AA4"); wg.addColorStop(1, "#21485A");
+    c.fillStyle = wg; c.beginPath(); c.moveTo(-10, yB + 8);
+    for (x = -10; x <= w + 10; x += 8) c.lineTo(x, curl(x));
+    c.lineTo(w + 10, yB + 8); c.closePath(); c.fill();
+    c.strokeStyle = "rgba(244,248,247," + (0.35 + 0.55 * crest).toFixed(2) + ")"; c.lineWidth = 1.5 + 3.5 * crest; c.lineCap = "round"; c.beginPath();
+    for (x = -10; x <= w + 10; x += 8) { if (x > -10) c.lineTo(x, curl(x) + 1); else c.moveTo(x, curl(x) + 1); }
     c.stroke();
-    c.strokeStyle = "rgba(240,248,247,0.25)"; c.lineWidth = 1.5; c.beginPath();
-    for (x = 0; x <= w + 8; x += 8) { var yy = surf(x) - 14 - 4 * Math.sin(x * 0.03 + t); if (x) c.lineTo(x, yy); else c.moveTo(x, yy); }
+    if (crest > 0.2) for (i = 0; i < 26; i++) {                                         // spray off the top
+      var px = hsh2(i, 70) * w, py = curl(px) - (2 + 10 * hsh2(i, 71)) * crest - 4 * Math.sin(t * 3 + i);
+      c.fillStyle = "rgba(244,248,247," + (0.5 * crest * hsh2(i, 72)).toFixed(2) + ")"; c.beginPath(); c.arc(px, py, 0.8 + 1.4 * hsh2(i, 73), 0, 6.2832); c.fill();
+    }
+
+    var far = h * 0.76, reach = yS + 4 + (far - yS) * L;                                // the wash on the sand
+    br.peak = Math.max(reach, (br.peak || reach) - dt * 8);
+    var edge = function (xx, rr) { return rr + 9 * Math.sin(xx * 0.011 + 1.3) + 5 * Math.sin(xx * 0.029 + t * 0.4) + 2.5 * Math.sin(xx * 0.08 - t * 1.1); };
+    if (br.peak > reach + 2) {                                                          // wet sand, darker and glossy, drying from the top
+      var wet = c.createLinearGradient(0, reach, 0, br.peak + 10);
+      wet.addColorStop(0, "rgba(32,30,28,0.42)"); wet.addColorStop(1, "rgba(32,30,28,0.06)");
+      c.fillStyle = wet; c.beginPath(); c.moveTo(-10, yS);
+      for (x = -10; x <= w + 10; x += 10) c.lineTo(x, edge(x, br.peak));
+      c.lineTo(w + 10, yS); c.closePath(); c.fill();
+      c.globalCompositeOperation = "lighter";
+      var sh = c.createRadialGradient(sx, (reach + br.peak) / 2, 0, sx, (reach + br.peak) / 2, w * 0.35);
+      sh.addColorStop(0, "rgba(255,196,140,0.12)"); sh.addColorStop(1, "rgba(255,196,140,0)");
+      c.fillStyle = sh; c.beginPath(); c.moveTo(-10, reach);
+      for (x = -10; x <= w + 10; x += 10) c.lineTo(x, edge(x, br.peak));
+      c.lineTo(w + 10, reach); c.closePath(); c.fill();
+      c.globalCompositeOperation = "source-over";
+      var lace = Math.min(1, (br.peak - reach) / 40) * Math.max(0, 1 - (br.peak - reach) / 260);   // foam left behind at the high point
+      if (lace > 0.02) {
+        c.strokeStyle = "rgba(244,248,247," + (0.55 * lace).toFixed(2) + ")"; c.lineWidth = 1.2;
+        for (j = 0; j < 2; j++) {
+          c.setLineDash([3 + 8 * hsh2(j, 5), 4 + 6 * hsh2(j, 6)]); c.beginPath();
+          for (x = -10; x <= w + 10; x += 10) { var ly = edge(x, br.peak) - 3 - j * 7 + 2 * Math.sin(x * 0.07 + j); if (x > -10) c.lineTo(x, ly); else c.moveTo(x, ly); }
+          c.stroke();
+        }
+        c.setLineDash([]);
+      }
+    }
+    var sheet = c.createLinearGradient(0, yS, 0, reach + 10);                              // the thin sheet of water, clear at its edge
+    sheet.addColorStop(0, "rgba(54,112,124,0.92)"); sheet.addColorStop(0.55, "rgba(84,146,150,0.62)"); sheet.addColorStop(1, "rgba(150,196,190,0.28)");
+    c.fillStyle = sheet; c.beginPath(); c.moveTo(-10, yS - 2);
+    for (x = -10; x <= w + 10; x += 8) c.lineTo(x, edge(x, reach));
+    c.lineTo(w + 10, yS - 2); c.closePath(); c.fill();
+    c.globalCompositeOperation = "lighter";                                                 // the sky caught in it
+    c.save(); c.beginPath(); c.moveTo(-10, yS - 2); for (x = -10; x <= w + 10; x += 8) c.lineTo(x, edge(x, reach)); c.lineTo(w + 10, yS - 2); c.closePath(); c.clip();
+    for (j = 0; j < 14; j++) {                                                               // broken streaks of sunset on the moving water
+      var fy = yS + (reach - yS) * ((j + 0.5) / 14), fwid = 10 + 60 * (j / 14) * (0.5 + 0.5 * Math.sin(t * 1.3 + j * 2.1));
+      c.fillStyle = "rgba(255,206,160," + (0.16 * (0.4 + 0.6 * Math.abs(Math.sin(t * 0.9 + j)))).toFixed(3) + ")";
+      c.beginPath(); c.ellipse(sx + 10 * Math.sin(j * 1.7 + t * 0.5), fy, fwid, 1.2 + j * 0.15, 0, 0, 6.2832); c.fill();
+    }
+    c.restore();
+    c.globalCompositeOperation = "source-over";
+    c.strokeStyle = "rgba(244,248,247,0.2)"; c.lineWidth = 1;                               // ripples crossing the sheet
+    for (j = 0; j < 4; j++) {
+      var ry = yS + (reach - yS) * ((j + (t * 0.25) % 1) / 4);
+      if (ry > reach - 6) continue;
+      c.beginPath(); for (x = -10; x <= w + 10; x += 12) { var yy = ry + 2 * Math.sin(x * 0.04 + j * 2 + t); if (x > -10) c.lineTo(x, yy); else c.moveTo(x, yy); } c.stroke();
+    }
+    var fw = rising ? 3 + 5 * st.f : 2.4;                                                   // the foam edge, thicker as it pushes up
+    c.strokeStyle = "rgba(246,250,249,0.92)"; c.lineWidth = fw; c.lineJoin = "round"; c.beginPath();
+    for (x = -10; x <= w + 10; x += 8) { if (x > -10) c.lineTo(x, edge(x, reach)); else c.moveTo(x, edge(x, reach)); }
     c.stroke();
-    var hz = h * 0.42; c.fillStyle = "rgba(255,214,150,0.08)"; c.fillRect(0, hz - 1, w, 2);
+    for (i = 0; i < 90; i++) {                                                              // bubbles riding just behind it
+      var bx = (hsh2(i, 80) * (w + 20) - 10 + t * (hsh2(i, 81) - 0.5) * 6 + w) % (w + 20) - 10, by = edge(bx, reach) - 2 - Math.pow(hsh2(i, 82), 2) * 26;
+      c.fillStyle = "rgba(246,250,249," + (0.25 + 0.55 * hsh2(i, 83)).toFixed(2) + ")"; c.beginPath(); c.arc(bx, by, 0.6 + 1.6 * hsh2(i, 84), 0, 6.2832); c.fill();
+    }
+    var vg = c.createRadialGradient(w / 2, h * 0.5, Math.min(w, h) * 0.35, w / 2, h * 0.5, Math.max(w, h) * 0.8);   // a soft vignette
+    vg.addColorStop(0, "rgba(4,10,14,0)"); vg.addColorStop(1, "rgba(4,10,14,0.5)");
+    c.fillStyle = vg; c.fillRect(0, 0, w, h);
     var left = Math.max(0, LENGTH - elapsed());
     $("br-timer").textContent = urgeStart ? (left ? String(Math.floor(left / 60000)).padStart(2, "0") + ":" + String(Math.floor(left / 1000) % 60).padStart(2, "0") + " left on the timer" : "The twenty minutes are up") : "";
     if (!still) br.raf = requestAnimationFrame(brDraw);
@@ -3697,7 +3839,7 @@
   function openBreathe() {
     var hadSea = playing;
     if (!playing) playSea();
-    br = { t0: performance.now(), pace: br && br.pace || "calm", cycles: -1, word: "", hadSea: hadSea, back: document.activeElement };
+    br = { t0: performance.now(), pace: brPace, cycles: -1, word: "", hadSea: hadSea, back: document.activeElement };
     $("breathe").hidden = false; document.body.style.overflow = "hidden";
     $("br-count").textContent = ""; $("br-word").textContent = "Settle in";
     $("br-hint").textContent = still ? "Breathe in for four, out for six. Let the sea set the pace." : "Breathe with the water. In as it comes up the shore, out as it draws back.";

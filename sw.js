@@ -1,6 +1,6 @@
 /* Opens without signal: the page and its icons are kept on the phone, and refreshed whenever there is a connection. */
-const CACHE = "clear-mornings-v1";
-const CORE = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
+const CACHE = "clear-mornings-v2";
+const CORE = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png", "img/today.svg", "img/progress.svg", "img/plan.svg", "img/read.svg", "img/help.svg"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));

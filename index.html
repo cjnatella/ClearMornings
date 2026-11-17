@@ -730,6 +730,19 @@
   .cl .pencil.gap { opacity: 0.7; }
   .cl.passed, .cl.behind { opacity: 0.8; }
 
+
+  /* Breathing with the sea */
+  .breathe { position: fixed; inset: 0; z-index: 33; color: #F4F8F7; display: grid; grid-template-rows: auto 1fr auto; }
+  .breathe canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .br-top, .br-mid, .br-foot { position: relative; }
+  .br-top { display: flex; justify-content: space-between; padding: calc(16px + env(safe-area-inset-top)) 20px 0; font-size: 0.9rem; color: rgba(244, 248, 247, 0.75); }
+  .br-mid { align-self: start; padding: 12vh 24px 0; text-align: center; }
+  .br-word { margin: 0; font-size: 2.6rem; font-weight: 800; letter-spacing: -0.03em; }
+  .br-hint { margin: 10px auto 0; max-width: 30ch; font-family: var(--reading); font-size: 1.15rem; line-height: 1.4; color: rgba(244, 248, 247, 0.85); }
+  .br-foot { display: grid; gap: 14px; padding: 0 20px calc(22px + env(safe-area-inset-bottom)); }
+  .br-pace { justify-content: center; }
+  .br-pace .chip { background: rgba(8, 22, 28, 0.55); color: #F4F8F7; }
+  .br-pace .chip.on { background: #F4F8F7; color: #12303C; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -780,6 +793,7 @@
       <div class="row" style="margin-top:10px">
         <button class="btn primary" id="urge-count" type="button">It has passed. Count it</button>
         <button class="btn" id="urge-stop" type="button">Stop without counting</button>
+        <button class="btn" id="breathe-start" type="button">Breathe with the sea</button>
         <button class="btn" id="skim-start-live" type="button">Skim stones while it passes</button>
       </div>
     </div>
@@ -994,7 +1008,10 @@
       <textarea id="bottle-text" class="reading" rows="3" placeholder="What do you want to hear when it is hard?"></textarea>
     </div>
     <button class="btn" id="bottle-save" type="button" style="margin-top:12px">Seal it in a bottle</button>
-    <ul class="notes" id="notes"></ul>
+    <details class="fold" id="notes-fold" hidden>
+      <summary id="notes-sum">Your bottles</summary>
+      <ul class="notes" id="notes"></ul>
+    </details>
   </section>
   <section class="panel">
   <h3 class="pt">Four things to read</h3>
@@ -1041,11 +1058,14 @@
   <section class="panel">
   <h3 class="pt">Your log</h3>
   <p class="lede" id="log-note">Your check-in answers, newest first. Copy them if you want to share them with someone, or paste them into a chat with me.</p>
+  <details class="fold" id="log-fold">
+  <summary id="log-sum">Show your log</summary>
   <div id="log-list"></div>
   <div class="row" style="margin-top:12px">
     <button class="btn" id="log-more" type="button" hidden>Show all</button>
     <button class="btn" id="log-copy" type="button">Copy my log</button>
   </div>
+  </details>
 
   </section>
   <section class="panel">
@@ -1117,6 +1137,19 @@
 <div class="chartpop" id="chartpop" role="dialog" aria-modal="true" aria-labelledby="chart-title" hidden>
   <div class="chart-bar"><span id="chart-title">Passage chart</span><button class="btn mini" id="chart-close" type="button">Close</button></div>
   <div class="chart-scroll" id="chart-scroll"><div class="chart-sheet" id="chart-sheet"></div></div>
+</div>
+<div class="breathe" id="breathe" role="dialog" aria-modal="true" aria-labelledby="br-word" hidden>
+  <canvas id="br-sea" aria-hidden="true"></canvas>
+  <div class="br-top"><span id="br-timer"></span><span id="br-count"></span></div>
+  <div class="br-mid"><p class="br-word" id="br-word" aria-live="polite">Settle in</p><p class="br-hint" id="br-hint">Breathe with the water. In as it comes up the shore, out as it draws back.</p></div>
+  <div class="br-foot">
+    <div class="chips br-pace" role="group" aria-label="Pace">
+      <button class="chip on" type="button" data-pace="calm">In 4, out 6</button>
+      <button class="chip" type="button" data-pace="box">Box: 4, 4, 4, 4</button>
+      <button class="chip" type="button" data-pace="slow">Slower: in 5, out 7</button>
+    </div>
+    <button class="btn night-btn" id="breathe-done" type="button">Back to the timer</button>
+  </div>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <div class="sheet" id="sheet" role="status" aria-live="polite" hidden>
@@ -2702,6 +2735,8 @@
   }
   function renderNotes() {
     var ul = $("notes"); ul.textContent = "";
+    $("notes-fold").hidden = !state.notes.length;
+    $("notes-sum").textContent = state.notes.length === 1 ? "Your bottle (1)" : "Your bottles (" + state.notes.length + ")";
     state.notes.slice().reverse().forEach(function (nt) {
       var li = document.createElement("li"), f = document.createElement("span"), t = document.createElement("span"), rm = document.createElement("button");
       f.className = "from"; t.className = "txt sealed"; t.textContent = "Sealed. It opens when you ride out an urge, or comes back by radio.";
@@ -2821,6 +2856,7 @@
       });
       list.appendChild(day);
     });
+    $("log-sum").textContent = keys.length ? "Show your log (" + keys.length + (keys.length === 1 ? " day)" : " days)") : "Show your log";
     $("log-more").hidden = keys.length <= 3;
     $("log-more").textContent = logAll ? "Show fewer" : "Show all " + keys.length + " days";
   }
@@ -3350,7 +3386,7 @@
     return { ctx: ctx, master: master, low: low, lfo: lfo };
   }
   function tuneSea() {
-    if (!seaAudio || !playing) return;
+    if (!seaAudio || !playing || br) return;
     var s = swell(), t = seaAudio.ctx.currentTime;                     // louder and brighter as the swell peaks
     seaAudio.master.gain.setTargetAtTime((reading ? 0.13 : 0.3) + 0.55 * s, t, 1.2);
     seaAudio.low.frequency.setTargetAtTime(900 + 1500 * s, t, 1.2);
@@ -3595,6 +3631,98 @@
   $("why-skip").addEventListener("click", function () { closeWhy(""); });
   $("urge-count").addEventListener("click", function () { endUrge(true); });
   $("urge-stop").addEventListener("click", function () { endUrge(false); });
+
+
+  /* ---------- breathing with the sea: the water comes up the shore as you breathe in and draws back as you breathe out ---------- */
+  var PACES = { calm: [["Breathe in", 4], ["Breathe out", 6]], box: [["Breathe in", 4], ["Hold", 4], ["Breathe out", 4], ["Hold", 4]], slow: [["Breathe in", 5], ["Breathe out", 7]] };
+  var br = null;
+  function brLevel(b, now) {                                // 0 = drawn right back, 1 = fully up the shore
+    var t = (now - b.t0) / 1000;
+    if (t < 3) return { word: "Settle in", lvl: 0.25, ph: -1, f: t / 3 };
+    t -= 3;
+    var seq = PACES[b.pace], cyc = seq.reduce(function (a, x) { return a + x[1]; }, 0), n = Math.floor(t / cyc), r = t - n * cyc, lvl = 0, prev = 0.25;
+    if (n !== b.cycles) { b.cycles = n; $("br-count").textContent = n ? n + (n === 1 ? " breath" : " breaths") : ""; }
+    for (var i = 0; i < seq.length; i++) {
+      var w = seq[i][0], d = seq[i][1];
+      if (r < d) {
+        var f = r / d, e = 0.5 - 0.5 * Math.cos(Math.PI * f);
+        lvl = w === "Breathe in" ? e : w === "Breathe out" ? 1 - e : (prev > 0.5 ? 1 : 0);
+        return { word: w, lvl: lvl, ph: i, f: f, left: Math.ceil(d - r) };
+      }
+      prev = w === "Breathe in" ? 1 : w === "Breathe out" ? 0 : prev;
+      r -= d;
+    }
+    return { word: "", lvl: 0, ph: 0, f: 0 };
+  }
+  function brDraw(now) {
+    if (!br) return;
+    var cv = $("br-sea"), c = cv.getContext("2d"), w = cv.clientWidth, h = cv.clientHeight, dpr = Math.min(window.devicePixelRatio || 1, 2);
+    if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var st = brLevel(br, now), t = (now - br.t0) / 1000, lvl = still ? 0.5 : st.lvl, x;
+    if (st.word !== br.word) {
+      br.word = st.word; $("br-word").textContent = st.word;
+      if (st.ph >= 0) $("br-hint").textContent = st.word === "Breathe in" ? "The water comes up the shore." : st.word === "Breathe out" ? "It draws back, slowly, all the way." : "Stay with it.";
+    }
+    if (seaAudio && playing) {                               // the sea follows the breath
+      var at = seaAudio.ctx.currentTime;
+      seaAudio.master.gain.setTargetAtTime(0.18 + 0.55 * lvl, at, 0.35);
+      seaAudio.low.frequency.setTargetAtTime(600 + 1500 * lvl, at, 0.35);
+    }
+    var sky = c.createLinearGradient(0, 0, 0, h);
+    sky.addColorStop(0, "#0B1E28"); sky.addColorStop(0.5, "#16364A"); sky.addColorStop(1, "#2A4A52");
+    c.fillStyle = sky; c.fillRect(0, 0, w, h);
+    var sand = c.createLinearGradient(0, h * 0.45, 0, h);       // the shore, rising towards you
+    sand.addColorStop(0, "#3E4A44"); sand.addColorStop(1, "#6B6250");
+    c.fillStyle = sand; c.fillRect(0, h * 0.42, w, h);
+    var edge = h * (0.96 - 0.5 * lvl), wet = h * (0.96 - 0.5 * Math.max(lvl, br.peak = Math.max((br.peak || 0) * 0.995, lvl)));
+    c.fillStyle = "rgba(30,40,40,0.35)"; c.fillRect(0, wet, w, h);       // the dark wet sand it leaves behind
+    var surf = function (xx) { return edge + 6 * Math.sin(xx * 0.018 + t * 0.9) + 3 * Math.sin(xx * 0.05 - t * 1.4); };
+    var g = c.createLinearGradient(0, h * 0.42, 0, edge);
+    g.addColorStop(0, "#1E4A5C"); g.addColorStop(1, "#3E7F8C");
+    c.fillStyle = g; c.beginPath(); c.moveTo(0, h * 0.42);
+    for (x = 0; x <= w + 8; x += 8) c.lineTo(x, surf(x));
+    c.lineTo(w, h * 0.42); c.closePath(); c.fill();
+    c.strokeStyle = "rgba(240,248,247,0.75)"; c.lineWidth = 3; c.lineCap = "round"; c.beginPath();   // the foam line
+    for (x = 0; x <= w + 8; x += 8) { if (x) c.lineTo(x, surf(x)); else c.moveTo(x, surf(x)); }
+    c.stroke();
+    c.strokeStyle = "rgba(240,248,247,0.25)"; c.lineWidth = 1.5; c.beginPath();
+    for (x = 0; x <= w + 8; x += 8) { var yy = surf(x) - 14 - 4 * Math.sin(x * 0.03 + t); if (x) c.lineTo(x, yy); else c.moveTo(x, yy); }
+    c.stroke();
+    var hz = h * 0.42; c.fillStyle = "rgba(255,214,150,0.08)"; c.fillRect(0, hz - 1, w, 2);
+    var left = Math.max(0, LENGTH - elapsed());
+    $("br-timer").textContent = urgeStart ? (left ? String(Math.floor(left / 60000)).padStart(2, "0") + ":" + String(Math.floor(left / 1000) % 60).padStart(2, "0") + " left on the timer" : "The twenty minutes are up") : "";
+    if (!still) br.raf = requestAnimationFrame(brDraw);
+  }
+  function openBreathe() {
+    var hadSea = playing;
+    if (!playing) playSea();
+    br = { t0: performance.now(), pace: br && br.pace || "calm", cycles: -1, word: "", hadSea: hadSea, back: document.activeElement };
+    $("breathe").hidden = false; document.body.style.overflow = "hidden";
+    $("br-count").textContent = ""; $("br-word").textContent = "Settle in";
+    $("br-hint").textContent = still ? "Breathe in for four, out for six. Let the sea set the pace." : "Breathe with the water. In as it comes up the shore, out as it draws back.";
+    br.raf = requestAnimationFrame(brDraw);
+    try { $("breathe-done").focus({ preventScroll: true }); } catch (e) {}
+  }
+  function closeBreathe() {
+    if (!br) return;
+    cancelAnimationFrame(br.raf);
+    var b = br; br = null; brPace = b.pace;
+    $("breathe").hidden = true; document.body.style.overflow = "";
+    if (!b.hadSea && !urgeStart) stopSea(); else tuneSea();
+    if (b.back && b.back.focus) { try { b.back.focus({ preventScroll: true }); } catch (e) {} }
+  }
+  var brPace = "calm";
+  $("breathe-start").addEventListener("click", function () { openBreathe(); if (br) br.pace = brPace; });
+  $("breathe-done").addEventListener("click", closeBreathe);
+  Array.prototype.forEach.call(document.querySelectorAll("[data-pace]"), function (b) {
+    b.addEventListener("click", function () {
+      if (!br) return;
+      br.pace = b.getAttribute("data-pace"); br.t0 = performance.now() - 3000; br.cycles = -1; br.word = "";
+      Array.prototype.forEach.call(document.querySelectorAll("[data-pace]"), function (o) { o.classList.toggle("on", o === b); });
+    });
+  });
+  document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && br) closeBreathe(); });
 
   /* ---------- skimming stones: tap as the stone touches the water ---------- */
   var skim = null;

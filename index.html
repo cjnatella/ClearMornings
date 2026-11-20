@@ -1194,7 +1194,11 @@
 
 
   /* ---------- dates ---------- */
-  var START = new Date(2026, 10, 15);           // Sunday 15 November 2026, local midnight
+  var START = new Date(2026, 10, 15);           // day 1: the day after the last drink (set from it once the record loads)
+  function startFrom(t) {                       // a drink at 2am still belongs to the night before
+    var d = new Date(t - 4 * 3600000); d = new Date(d.getFullYear(), d.getMonth(), d.getDate()); d.setDate(d.getDate() + 1); return d;
+  }
+  var DEFAULT_LAST = new Date(2026, 10, 15, 2, 0).getTime();
   var BEST = 97;                                // one day past this year's 96
   var DAY = 86400000;
 
@@ -1234,6 +1238,7 @@
     did: {},
     journal: {},
     lastDrink: null,
+    banked: 0,
     dispatchSeen: null,
     hourMark: -1,
     notes: [],
@@ -1321,7 +1326,8 @@
   function adopt(s) {
     absorb(s);
     if (Array.isArray(s.pieces)) state.pieces = cleanPieces(s.pieces);
-    if (typeof s.lastDrink === "number") state.lastDrink = s.lastDrink;
+    if (typeof s.lastDrink === "number") state.lastDrink = Math.max(state.lastDrink || 0, s.lastDrink);
+    if (typeof s.banked === "number") state.banked = Math.max(state.banked || 0, s.banked);
     if (Array.isArray(s.notes)) state.notes = s.notes.filter(function (x) { return x && x.text; }).map(function (x) { return { at: Number(x.at) || 0, text: String(x.text).slice(0, 3000) }; }).slice(-30);
     if (s.reward && typeof s.reward === "object") state.reward = { name: String(s.reward.name || ""), cost: Number(s.reward.cost) || 0 };
     if (typeof s.urges === "number") state.urges = s.urges;
@@ -1351,7 +1357,7 @@
              stamps: JSON.parse(JSON.stringify(state.stamps)), reward: { name: state.reward.name, cost: state.reward.cost },
              fullTimer: !!state.fullTimer, fridayWatch: state.fridayWatch || "",
              did: JSON.parse(JSON.stringify(state.did)), orders: JSON.parse(JSON.stringify(state.orders)),
-             pieces: cleanPieces(state.pieces), lastDrink: state.lastDrink, hourMark: state.hourMark, dispatchSeen: state.dispatchSeen,
+             pieces: cleanPieces(state.pieces), lastDrink: state.lastDrink, banked: state.banked || 0, hourMark: state.hourMark, dispatchSeen: state.dispatchSeen,
              notes: state.notes.slice(), journal: JSON.parse(JSON.stringify(state.journal)), closed: JSON.parse(JSON.stringify(state.closed)), finds: JSON.parse(JSON.stringify(state.finds)), bestSkim: state.bestSkim || 0,
              relays: JSON.parse(JSON.stringify(state.relays)), relayNo: JSON.parse(JSON.stringify(state.relayNo)) };
   }
@@ -1409,10 +1415,12 @@
   /* ---------- rendering ---------- */
   var $ = function (id) { return document.getElementById(id); };
   var now = new Date();
+  function syncStart() { START = startFrom(lastDrinkAt()); }
+  syncStart();
   var n = dayNumber(now);
 
   function renderHeader() {
-    now = new Date(); n = dayNumber(now);
+    syncStart(); now = new Date(); n = dayNumber(now);
     $("today-date").textContent = fmt(now, { weekday: "long", day: "numeric", month: "long" });
     if (urgeStart || skim) return;
     $("count").textContent = "Day " + n;
@@ -1605,7 +1613,7 @@
     return planFull(state.plans[wk]) && marked(addDays(fri, 1)) && marked(addDays(fri, 2));
   }
   function seaMiles() {
-    var total = n * 10;
+    var total = (n + (state.banked || 0)) * 10;            // every sober day counts, including earlier stretches
     state.mornings.forEach(function (d) { var g = parseDay(d).getDay(); total += (g === 0 || g === 6) ? 15 : 5; });
     var perDay = {};
     state.log.forEach(function (e) { var k = iso(new Date(e.t)); perDay[k] = Math.min(2, (perDay[k] || 0) + 1); });
@@ -2713,7 +2721,6 @@
   }
 
   /* Clean time: a live clock since the last drink */
-  var DEFAULT_LAST = new Date(2026, 10, 15, 2, 0).getTime();
   var HOUR_MARKS = [24, 48, 72, 100, 168, 250, 336, 500, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 6000, 7000, 8000, 8760, 10000];
   function lastDrinkAt() { return typeof state.lastDrink === "number" ? state.lastDrink : DEFAULT_LAST; }
   function hoursClean() { return Math.max(0, (Date.now() - lastDrinkAt()) / 3600000); }
@@ -3945,10 +3952,15 @@
     var v = ev.target.value; if (!v) return;
     var q = v.split(/[-T:]/), t = new Date(+q[0], +q[1] - 1, +q[2], +q[3], +q[4]).getTime();
     if (isNaN(t) || t > Date.now()) { ev.target.value = localInput(lastDrinkAt()); return; }
-    state.lastDrink = t; var hrs = hoursClean(), idx = -1;
+    var oldStart = START;
+    state.lastDrink = t; syncStart();
+    state.banked = Math.max(0, (state.banked || 0) + Math.round((START - oldStart) / DAY));   // the days already won stay won
+    n = dayNumber(new Date());
+    var hrs = hoursClean(), idx = -1;
     HOUR_MARKS.forEach(function (h, i) { if (hrs >= h) idx = i; });
     state.hourMark = idx;                                   // a correction does not trigger markers
-    changed(); tickClock();
+    changed(); tickClock(); renderAll();
+    if (START > oldStart) toast("Day 1 again. The days before still count, and the sea miles stay yours.");
   });
   $("bottle-save").addEventListener("click", function () {
     var el = $("bottle-text"), v = el.value.trim(); if (!v) { el.focus(); return; }

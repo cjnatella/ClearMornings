@@ -2891,7 +2891,9 @@
 
   /* Closing the day: the button pressed in bed, the final word on the day */
   function ritualDate(d) { return midnight(new Date(d.getTime() - 4 * 3600000)); }   // after midnight still counts as the night before
-  function closedCount() { return Object.keys(state.closed).length; }
+  function closedCount() {                                  // the stars belong to this stretch; earlier nights still count for sea miles
+    var from = iso(START); return Object.keys(state.closed).filter(function (k) { return k >= from; }).length;
+  }
   function clock(ts) { return new Date(ts).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }); }
   function renderClose() {
     var d = new Date(), rd = ritualDate(d), dn = dayNumber(rd), h = d.getHours();
@@ -2968,6 +2970,7 @@
   function nightMessage(dn) { return NIGHT_MSGS[dn] || NIGHT_POOL[(dn * 7) % NIGHT_POOL.length]; }
 
   function openNight(dayNum, count, gained) {
+    count = Math.max(1, count || 0);
     var box = $("night"), cv = $("night-sky"), c = cv.getContext("2d");
     $("night-title").textContent = "Day " + dayNum + " closed";
     $("night-msg").textContent = nightMessage(dayNum);
@@ -4015,7 +4018,7 @@
   $("close-replay").addEventListener("click", function () {      // replays the night without changing anything
     var keys = Object.keys(state.closed).sort(), k = keys[keys.length - 1];
     if (!k) return;
-    var cnt = keys.length, seq = Math.min(1.6, (cnt - 1) * 0.05), landAt = still ? 0.3 : 0.5 + seq + 0.95;
+    var cnt = closedCount() || keys.length, seq = Math.min(1.6, (cnt - 1) * 0.05), landAt = still ? 0.3 : 0.5 + seq + 0.95;
     nightOpen = true; quietUntil = Date.now() + (landAt + 6) * 1000;
     playWav(nightSound(landAt, isMilestone(dayNumber(parseDay(k)))));
     openNight(dayNumber(parseDay(k)), cnt, 0);

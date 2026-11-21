@@ -749,6 +749,32 @@
   /* Chapter illustrations */
   .chap-art { margin: 14px 0 0; border-radius: var(--r-card); overflow: hidden; aspect-ratio: 800 / 300; background: #21434F; box-shadow: var(--shadow); }
   .chap-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+  /* A hazard passed */
+  .passed { position: fixed; inset: 0; z-index: 34; color: #25221D; }
+  .passed canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .ps-card {
+    position: absolute; left: 16px; right: 16px; bottom: calc(18px + env(safe-area-inset-bottom)); max-width: 460px; margin: 0 auto;
+    padding: 24px 22px 20px; border-radius: 18px; background: #F5EFDD; box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.6);
+    opacity: 0; transform: translateY(40px); transition: opacity 0.5s ease, transform 0.6s cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+  .ps-card::before { content: ""; position: absolute; inset: 7px; border: 1px solid rgba(37, 34, 29, 0.35); border-radius: 13px; pointer-events: none; }
+  .passed.show .ps-card { opacity: 1; transform: none; }
+  .ps-kicker { margin: 0; font-family: var(--reading); font-style: italic; font-size: 0.95rem; color: #5A5247; }
+  .ps-name { margin: 2px 0 0; padding-right: 100px; font-size: 1.7rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+  .ps-date { margin: 4px 0 0; font-size: 0.9rem; color: #5A5247; }
+  .ps-rule { margin: 12px 0 0; font-family: "Caveat", "Bradley Hand", cursive; font-size: 1.45rem; line-height: 1.1; color: #3E3A35; }
+  .ps-tally { margin: 12px 0 16px; font-weight: 700; font-size: 0.95rem; color: #2F6F5A; }
+  .ps-card .night-btn { width: 100%; }
+  .ps-stamp {
+    position: absolute; top: 14px; right: 14px; display: grid; justify-items: center; padding: 8px 12px 6px; border: 3px solid #B23A2A; border-radius: 8px;
+    color: #B23A2A; transform: rotate(-12deg) scale(2.4); opacity: 0; mix-blend-mode: multiply;
+  }
+  .ps-stamp span { font-size: 1.15rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; line-height: 1; }
+  .ps-stamp i { font-style: normal; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; margin-top: 3px; }
+  .passed.show .ps-stamp { animation: ps-thump 0.42s 0.55s cubic-bezier(0.3, 1.4, 0.5, 1) forwards; }
+  @keyframes ps-thump { 0% { opacity: 0; transform: rotate(-12deg) scale(2.4); } 60% { opacity: 0.95; transform: rotate(-12deg) scale(0.92); } 100% { opacity: 0.88; transform: rotate(-12deg) scale(1); } }
+  @media (prefers-reduced-motion: reduce) { .ps-card { transition: none; } .passed.show .ps-stamp { animation: none; opacity: 0.88; transform: rotate(-12deg); } }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -1160,6 +1186,18 @@
       <button class="chip" type="button" data-pace="slow">Slower: in 5, out 7</button>
     </div>
     <button class="btn night-btn" id="breathe-done" type="button">Back to the timer</button>
+  </div>
+</div>
+<div class="passed" id="passed" role="dialog" aria-modal="true" aria-labelledby="ps-name" hidden>
+  <canvas id="ps-sky" aria-hidden="true"></canvas>
+  <div class="ps-card">
+    <div class="ps-stamp" aria-hidden="true"><span>Passed</span><i id="ps-stamp-date"></i></div>
+    <p class="ps-kicker">Hazard passed</p>
+    <h2 class="ps-name" id="ps-name"></h2>
+    <p class="ps-date" id="ps-date"></p>
+    <p class="ps-rule" id="ps-rule"></p>
+    <p class="ps-tally" id="ps-tally"></p>
+    <button class="btn night-btn" id="ps-ok" type="button">Hold your course</button>
   </div>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
@@ -2020,7 +2058,7 @@
         if (days < 0) {
           var ok = document.createElement("button");
           ok.type = "button"; ok.className = "btn mini"; ok.textContent = "Mark it passed";
-          ok.addEventListener("click", function () { pc.held = iso(new Date()); changed(); });
+          ok.addEventListener("click", function () { pc.held = iso(new Date()); passing = {}; changed(); celebratePassed(pc); });
           foot.appendChild(ok);
         }
         var rm = document.createElement("button");
@@ -2707,7 +2745,7 @@
 
   function showSheet() {
     var sh = $("sheet");
-    if (nightOpen || radioOpen) return;
+    if (nightOpen || radioOpen || passing) return;
     maybeRadio(); if (radioOpen) return;
     if (!queue.length) { sh.hidden = true; return; }
     var it = queue[0];
@@ -3654,6 +3692,168 @@
   $("urge-stop").addEventListener("click", function () { endUrge(false); });
 
 
+  /* ---------- a hazard passed: it looms out of the weather, you sail by it, the sky clears and the chart is stamped ---------- */
+  var passRaf = 0, passing = null;
+  function passSound() {
+    var notes = [], D3 = 146.83, A3 = 220, D4 = 293.66, Fs4 = 369.99, A4 = 440, B4 = 493.88;
+    [D3, A3, D4].forEach(function (f) { notes.push(pad(0.2, f * 0.75, 0.035, 3.6)); });             // low and uncertain while it is ahead
+    [D3, A3, D4, Fs4, A4].forEach(function (f) { notes.push(pad(3.6, f, f < 200 ? 0.05 : 0.06, 5)); });   // and opening out once it is behind
+    [587.33, 739.99, 880, 1174.66, 1479.98].forEach(function (f, i) { notes.push(celesta(3.7 + i * 0.1, f, 0.075)); });
+    notes.push(celesta(5.15, 1174.66, 0.06, 3)); notes.push(celesta(5.17, B4 * 2, 0.04, 3));
+    var waves = [{ at: 0, len: 4.4, amp: 0.13 }, { at: 3.4, len: 5.2, amp: 0.06 }];
+    return renderWav("passed", notes, 8.8, waves);
+  }
+  function celebratePassed(pc) {
+    var box = $("passed"), cv = $("ps-sky"), c = cv.getContext("2d"), dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var kind = hazardType(pc), t0 = performance.now(), held = state.pieces.filter(function (x) { return x.held; }).length;
+    passing = { back: document.activeElement };
+    $("ps-name").textContent = pc.name;
+    $("ps-date").textContent = fmt(parseDay(pc.date), { weekday: "long", day: "numeric", month: "long" });
+    $("ps-rule").textContent = pc.rule ? "“" + pc.rule + "”" : "";
+    $("ps-rule").hidden = !pc.rule;
+    $("ps-stamp-date").textContent = fmt(new Date(), { day: "numeric", month: "short", year: "numeric" }).toUpperCase();
+    $("ps-tally").textContent = "+100 sea miles. " + (held === 1 ? "The first hazard you have passed." : held + " hazards passed so far.");
+    box.classList.remove("show"); box.hidden = false; document.body.style.overflow = "hidden";
+    playWav(passSound()); buzz([20, 60, 20]);
+    var w, h, hz, rain = [], spray = [], gl = [], i;
+    function size() { w = cv.clientWidth; h = cv.clientHeight; cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); hz = h * 0.46; }
+    size();
+    for (i = 0; i < 140; i++) rain.push({ x: Math.random(), y: Math.random(), s: 0.6 + Math.random() * 0.8 });
+    for (i = 0; i < 4; i++) gl.push({ x: 0.2 + 0.6 * Math.random(), y: 0.12 + 0.18 * Math.random(), s: 0.7 + 0.5 * Math.random(), p: Math.random() * 6 });
+    function ease(x) { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); }
+    function mixc(a, b, k) { return "rgb(" + Math.round(a[0] + (b[0] - a[0]) * k) + "," + Math.round(a[1] + (b[1] - a[1]) * k) + "," + Math.round(a[2] + (b[2] - a[2]) * k) + ")"; }
+    function hazard(x, y, s, t, k) {                          // the hazard itself, drawn dark against the weather
+      c.save(); c.translate(x, y); c.scale(s, s);
+      var dark = "#0C1418";
+      if (kind === "rocks" || kind === "fog") {
+        c.fillStyle = dark; c.beginPath(); c.moveTo(-70, 6); c.lineTo(-52, -26); c.lineTo(-34, -14); c.lineTo(-12, -48); c.lineTo(8, -30); c.lineTo(26, -40); c.lineTo(52, -8); c.lineTo(72, 6); c.closePath(); c.fill();
+        c.fillStyle = "rgba(240,248,247," + (0.55 + 0.35 * Math.sin(t * 2.4)).toFixed(2) + ")";            // surf breaking on them
+        for (var q = 0; q < 9; q++) { c.beginPath(); c.ellipse(-64 + q * 16, 4 - Math.abs(Math.sin(t * 2 + q)) * 10, 10, 4, 0, 0, 6.28); c.fill(); }
+      } else if (kind === "wreck") {
+        c.fillStyle = dark; c.beginPath(); c.moveTo(-80, 6); c.lineTo(-60, -14); c.lineTo(40, -22); c.lineTo(70, 6); c.closePath(); c.fill();
+        c.strokeStyle = dark; c.lineWidth = 5; c.beginPath(); c.moveTo(-10, -18); c.lineTo(-24, -86); c.moveTo(24, -20); c.lineTo(34, -64); c.stroke();
+        c.lineWidth = 2; c.beginPath(); c.moveTo(-24, -86); c.lineTo(34, -64); c.moveTo(-20, -60); c.lineTo(-56, -14); c.stroke();
+      } else if (kind === "buoy") {
+        c.fillStyle = "#1C1C1C"; c.beginPath(); c.moveTo(-14, 4); c.lineTo(-8, -50); c.lineTo(8, -50); c.lineTo(14, 4); c.closePath(); c.fill();
+        c.fillStyle = "#C9A23A"; c.fillRect(-11, -30, 22, 12);
+        c.fillStyle = "#111"; c.beginPath(); c.moveTo(0, -78); c.lineTo(-9, -62); c.lineTo(9, -62); c.closePath(); c.fill(); c.beginPath(); c.moveTo(0, -50); c.lineTo(-9, -60); c.lineTo(9, -60); c.closePath(); c.fill();
+        var fl = Math.pow(Math.max(0, Math.sin(t * 3.2)), 8);
+        c.fillStyle = "rgba(255,240,190," + (0.3 + 0.7 * fl).toFixed(2) + ")"; c.beginPath(); c.arc(0, -84, 3 + 6 * fl, 0, 6.28); c.fill();
+      } else {                                                  // a squall: a dark cloud mass with rain hanging beneath it
+        var rg = c.createLinearGradient(0, -70, 0, 10); rg.addColorStop(0, "rgba(16,22,28,0.75)"); rg.addColorStop(1, "rgba(16,22,28,0)");
+        c.fillStyle = rg; c.fillRect(-100, -70, 200, 80);
+        c.strokeStyle = "rgba(150,170,180,0.28)"; c.lineWidth = 1.2;
+        for (var r0 = -96; r0 < 96; r0 += 7) { c.beginPath(); c.moveTo(r0, -66); c.lineTo(r0 - 10 - 4 * Math.sin(r0 + t), 6); c.stroke(); }
+        [[-70, -86, 46], [-30, -100, 58], [20, -96, 54], [64, -84, 44], [0, -78, 70]].forEach(function (bb) {
+          var cg = c.createRadialGradient(bb[0], bb[1], 0, bb[0], bb[1], bb[2]);
+          cg.addColorStop(0, "rgba(12,18,24,0.95)"); cg.addColorStop(0.7, "rgba(12,18,24,0.8)"); cg.addColorStop(1, "rgba(12,18,24,0)");
+          c.fillStyle = cg; c.beginPath(); c.arc(bb[0], bb[1], bb[2], 0, 6.28); c.fill();
+        });
+      }
+      c.restore();
+    }
+    function frame(now) {
+      if (box.hidden) return;
+      if (cv.clientWidth !== w || cv.clientHeight !== h) size();
+      var t = still ? 6 : (now - t0) / 1000;
+      var pass = ease((t - 0.6) / 2.8), clear = ease((t - 2.8) / 1.8), sun = ease((t - 3.4) / 2.2);
+      c.setTransform(dpr, 0, 0, dpr, 0, 0);
+      var sky = c.createLinearGradient(0, 0, 0, hz);           // the weather lifting
+      sky.addColorStop(0, mixc([22, 28, 34], [70, 128, 170], clear)); sky.addColorStop(0.7, mixc([48, 56, 62], [170, 200, 214], clear)); sky.addColorStop(1, mixc([70, 78, 80], [250, 222, 176], clear));
+      c.fillStyle = sky; c.fillRect(0, 0, w, hz + 1);
+      var sx = w * 0.62, sy = hz - (40 + 90 * sun);
+      if (sun > 0) {
+        c.save(); c.globalCompositeOperation = "lighter";
+        var sg = c.createRadialGradient(sx, sy, 0, sx, sy, w * 0.9); sg.addColorStop(0, "rgba(255,226,170," + (0.75 * sun).toFixed(2) + ")"); sg.addColorStop(0.2, "rgba(255,200,140," + (0.3 * sun).toFixed(2) + ")"); sg.addColorStop(1, "rgba(255,200,140,0)");
+        c.fillStyle = sg; c.fillRect(0, 0, w, hz);
+        for (i = 0; i < 9; i++) {                               // light breaking through
+          var a = -Math.PI / 2 + (i - 4) * 0.24 + 0.03 * Math.sin(t * 0.4 + i);
+          c.fillStyle = "rgba(255,232,190," + (0.04 * sun).toFixed(3) + ")"; c.beginPath(); c.moveTo(sx, sy);
+          c.lineTo(sx + Math.cos(a - 0.05) * w * 1.4, sy + Math.sin(a - 0.05) * w * 1.4); c.lineTo(sx + Math.cos(a + 0.05) * w * 1.4, sy + Math.sin(a + 0.05) * w * 1.4); c.closePath(); c.fill();
+        }
+        c.restore();
+        c.fillStyle = "rgba(255,246,222," + sun.toFixed(2) + ")"; c.beginPath(); c.arc(sx, sy, 22, 0, 6.28); c.fill();
+      }
+      for (i = 0; i < 6; i++) {                                 // storm cloud, parting left and right
+        var side = i % 2 ? 1 : -1, cx = w / 2 + side * (w * (0.1 + 0.12 * (i >> 1)) + clear * w * 0.7), cy = hz * (0.18 + 0.12 * (i >> 1)), cw = w * 0.5;
+        c.save(); c.translate(cx, cy); c.scale(1, 0.32);
+        var cg = c.createRadialGradient(0, 0, 0, 0, 0, cw); cg.addColorStop(0, "rgba(14,20,26," + (0.85 - 0.2 * clear).toFixed(2) + ")"); cg.addColorStop(0.6, "rgba(14,20,26," + (0.5 - 0.15 * clear).toFixed(2) + ")"); cg.addColorStop(1, "rgba(14,20,26,0)");
+        c.fillStyle = cg; c.beginPath(); c.arc(0, 0, cw, 0, 6.28); c.fill(); c.restore();
+      }
+      var swell = 1 - 0.7 * clear, depth = h - hz;
+      c.fillStyle = mixc([24, 36, 42], [44, 98, 118], clear); c.fillRect(0, hz, w, depth);
+      for (i = 0; i < 12; i++) {                                // the sea, rough and then easing
+        var u = (i + ((t * 0.3) % 1)) / 12, y = hz + depth * Math.pow(u, 1.7), amp = (1 + 14 * u) * swell + 2 * u;
+        c.fillStyle = mixc([30 + 20 * (1 - u), 46 + 20 * (1 - u), 54 + 20 * (1 - u)], [70 - 30 * u, 140 - 60 * u, 160 - 70 * u], clear);
+        c.beginPath(); c.moveTo(0, h);
+        for (var x = 0; x <= w + 10; x += 10) c.lineTo(x, y + amp * Math.sin(x * 0.02 / (0.3 + u) + i * 1.7 + t * (1.2 - 0.5 * clear)));
+        c.lineTo(w, h); c.closePath(); c.fill();
+        if (u > 0.3) { c.strokeStyle = "rgba(240,248,247," + (0.25 * swell).toFixed(2) + ")"; c.lineWidth = 1.5; c.stroke(); }
+      }
+      if (sun > 0) {                                            // the sun's road on calm water
+        c.save(); c.globalCompositeOperation = "lighter";
+        for (i = 0; i < 22; i++) {
+          var gy = hz + 4 + depth * Math.pow(i / 22, 1.5), gw = 6 + 40 * (i / 22) * (0.5 + 0.5 * Math.sin(t * 2 + i));
+          c.fillStyle = "rgba(255,220,170," + (0.45 * sun * (1 - i / 26)).toFixed(2) + ")"; c.beginPath(); c.ellipse(sx + 14 * Math.sin(i * 2.3 + t), gy, gw, 1.4 + i * 0.08, 0, 0, 6.28); c.fill();
+        }
+        c.restore();
+      }
+      var hx = w * 0.5 - pass * w * 0.95, hs = 0.6 + pass * 1.6, hy = hz + 8 + pass * depth * 0.12;   // the hazard, sliding past to port
+      c.globalAlpha = Math.max(0, 1 - Math.max(0, pass - 0.75) * 4);
+      hazard(hx, hy, hs, t, kind);
+      c.globalAlpha = 1;
+      if (pass > 0.2 && pass < 0.9 && !still && Math.random() < 0.5) for (i = 0; i < 4; i++) spray.push({ x: hx + 60 * hs, y: hy, vx: 60 + Math.random() * 120, vy: -(60 + Math.random() * 140), a: 1 });
+      for (i = spray.length - 1; i >= 0; i--) {
+        var sp = spray[i]; sp.vy += 6; sp.x += sp.vx / 60; sp.y += sp.vy / 60; sp.a -= 0.025;
+        if (sp.a <= 0) { spray.splice(i, 1); continue; }
+        c.fillStyle = "rgba(240,248,247," + sp.a.toFixed(2) + ")"; c.beginPath(); c.arc(sp.x, sp.y, 1.6, 0, 6.28); c.fill();
+      }
+      var rainA = 1 - clear;                                    // rain, easing off
+      if (rainA > 0.02) {
+        c.strokeStyle = "rgba(200,214,222," + (0.35 * rainA).toFixed(2) + ")"; c.lineWidth = 1;
+        c.beginPath();
+        rain.forEach(function (r) { var ry = ((r.y + t * 1.6 * r.s) % 1) * h, rx = ((r.x + t * 0.15) % 1) * w; c.moveTo(rx, ry); c.lineTo(rx - 4, ry + 16 * r.s); });
+        c.stroke();
+      }
+      if (sun > 0.3) {                                          // gulls come back out
+        c.strokeStyle = "rgba(30,40,46," + Math.min(1, (sun - 0.3) * 2).toFixed(2) + ")"; c.lineWidth = 2; c.lineCap = "round";
+        gl.forEach(function (g0) {
+          var gx = ((g0.x + t * 0.025 * g0.s) % 1.2) * w, gy = g0.y * h, f = Math.sin(t * 5 * g0.s + g0.p) * 4, s0 = 9 * g0.s;
+          c.beginPath(); c.moveTo(gx - s0, gy + f * 0.3); c.quadraticCurveTo(gx - s0 / 2, gy - 5 - f, gx, gy); c.quadraticCurveTo(gx + s0 / 2, gy - 5 - f, gx + s0, gy + f * 0.3); c.stroke();
+        });
+      }
+      var bob = Math.sin(t * 1.4) * 4 * swell, roll = Math.sin(t * 1.1) * 0.05 * swell;   // our foredeck, holding its course
+      c.save(); c.translate(w / 2, h * 0.8 + bob); c.rotate(roll);
+      var tipY = -h * 0.13, base = h * 0.3, half = Math.min(w * 0.62, 300);
+      var deck = function (k, dy) { c.beginPath(); c.moveTo(0, tipY + dy); c.bezierCurveTo(half * 0.55 * k, tipY + dy + 8, half * k, base * 0.25, half * 1.1 * k, base); c.lineTo(-half * 1.1 * k, base); c.bezierCurveTo(-half * k, base * 0.25, -half * 0.55 * k, tipY + dy + 8, 0, tipY + dy); c.closePath(); };
+      deck(1.04, -3); c.fillStyle = "#0E1A20"; c.fill();
+      deck(1, 0); c.fillStyle = "#EDE8DC"; c.fill();
+      var tk = c.createLinearGradient(0, tipY, 0, base); tk.addColorStop(0, "#B98A58"); tk.addColorStop(1, "#7A5634");
+      deck(0.88, 8); c.fillStyle = tk; c.fill();
+      c.save(); deck(0.88, 8); c.clip(); c.strokeStyle = "rgba(50,30,16,0.45)"; c.lineWidth = 1;
+      for (i = -10; i <= 10; i++) { c.beginPath(); c.moveTo(0, tipY - 40); c.lineTo(i * 46, base + 10); c.stroke(); }
+      var ds = c.createLinearGradient(0, 0, 0, base); ds.addColorStop(0, "rgba(0,0,0,0)"); ds.addColorStop(1, "rgba(0,0,0,0.45)"); c.fillStyle = ds; c.fillRect(-w, 0, w * 2, base);
+      c.restore();
+      c.strokeStyle = "#C9CFD4"; c.lineWidth = 3; c.lineCap = "round";                      // the pulpit rail
+      c.beginPath(); c.moveTo(-half * 0.62, base * 0.5); c.bezierCurveTo(-half * 0.42, tipY - 30, half * 0.42, tipY - 30, half * 0.62, base * 0.5); c.stroke();
+      [-0.5, -0.25, 0.25, 0.5].forEach(function (k) { var px = half * k, py = tipY + 14 + Math.abs(k) * base * 0.5; c.beginPath(); c.moveTo(px, py + 18); c.lineTo(px * 0.96, py - 18 - (0.5 - Math.abs(k)) * 18); c.stroke(); });
+      c.restore();
+      if (t > 4.6 && !box.classList.contains("show")) {
+        box.classList.add("show"); buzz([40, 80, 40]);
+        try { $("ps-ok").focus({ preventScroll: true }); } catch (e) {}
+      }
+      if (!still) passRaf = requestAnimationFrame(frame);
+    }
+    cancelAnimationFrame(passRaf); passRaf = requestAnimationFrame(frame);
+    if (still) { frame(performance.now()); box.classList.add("show"); }
+  }
+  function closePassed() {
+    cancelAnimationFrame(passRaf); var box = $("passed"); box.hidden = true; box.classList.remove("show"); document.body.style.overflow = "";
+    var b = passing && passing.back; passing = null;
+    setTimeout(function () { showSheet(); }, 300);
+    if (b && b.focus) { try { b.focus({ preventScroll: true }); } catch (e) {} }
+  }
+
   /* ---------- breathing with the sea: the water comes up the shore as you breathe in and draws back as you breathe out ---------- */
   var PACES = { calm: [["Breathe in", 4], ["Breathe out", 6]], box: [["Breathe in", 4], ["Hold", 4], ["Breathe out", 4], ["Hold", 4]], slow: [["Breathe in", 5], ["Breathe out", 7]] };
   var br = null;
@@ -3867,6 +4067,7 @@
   var brPace = "calm";
   $("breathe-start").addEventListener("click", function () { openBreathe(); if (br) br.pace = brPace; });
   $("breathe-done").addEventListener("click", closeBreathe);
+  $("ps-ok").addEventListener("click", closePassed);
   Array.prototype.forEach.call(document.querySelectorAll("[data-pace]"), function (b) {
     b.addEventListener("click", function () {
       if (!br) return;

@@ -2024,6 +2024,13 @@
     if ($("night").hidden && $("radio").hidden) document.body.style.overflow = "";
     if (chartBack && chartBack.focus) { try { chartBack.focus({ preventScroll: true }); } catch (e) {} }
   }
+  function unpass() {                                       // take back what passing gave: its stamp, if it was the only one, and any sea area it carried you into
+    if (!state.pieces.some(function (x) { return x.held; })) delete state.stamps.piece;
+    var m = seaMiles(), idx = 0;
+    AREAS.forEach(function (a, i) { if (m >= a[1]) idx = i; });
+    if (typeof state.lastArea === "number" && state.lastArea > idx) { state.lastArea = idx; state.dispatchSeen = Math.min(state.dispatchSeen, idx); shownDispatch = null; }
+    changed();
+  }
   function renderPieces() {
     var ul = $("pieces"), today = midnight(new Date()), ae = document.activeElement;
     if (ae && ae.tagName === "TEXTAREA" && ul.contains(ae)) return;      // never rebuild under the cursor
@@ -2048,6 +2055,16 @@
       rule.addEventListener("change", function () { pc.rule = rule.value.trim(); changed(); });
       lineField(rule);
       li.appendChild(tile); li.appendChild(head); li.appendChild(rule);
+      if (pc.held) {                                         // a passed hazard can be undone, or removed altogether
+        var pf = document.createElement("div"); pf.className = "haz-foot";
+        var und = document.createElement("button"); und.type = "button"; und.className = "link-btn"; und.textContent = "Undo passed";
+        und.setAttribute("aria-label", "Undo marking " + pc.name + " as passed");
+        und.addEventListener("click", function () { pc.held = ""; unpass(); });
+        var rmh = document.createElement("button"); rmh.type = "button"; rmh.className = "link-btn"; rmh.textContent = "Remove";
+        rmh.setAttribute("aria-label", "Remove " + pc.name);
+        rmh.addEventListener("click", function () { state.pieces = state.pieces.filter(function (x) { return x !== pc; }); unpass(); });
+        pf.appendChild(und); pf.appendChild(rmh); li.appendChild(pf);
+      }
       if (!pc.held) {
         var foot = document.createElement("div"); foot.className = "haz-foot";
         if (days === 0) {
